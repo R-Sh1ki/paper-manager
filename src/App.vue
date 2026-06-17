@@ -2,6 +2,12 @@
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
+const message = ref("");
+
+async function checkBackend() {
+  message.value = await invoke<string>("app_info");
+}
+
 const greetMsg = ref("");
 const name = ref("");
 
@@ -33,6 +39,20 @@ async function greet() {
       <button type="submit">Greet</button>
     </form>
     <p>{{ greetMsg }}</p>
+
+    <button
+      class="mt-6 rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-950 transition hover:bg-white"
+      @click="checkBackend"
+    >
+      Check Rust Backend Button
+    </button>
+
+    <p
+      v-if="message"
+      class="mt-4 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-300"
+    >
+      {{ message }}
+    </p>
   </main>
 </template>
 
