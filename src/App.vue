@@ -1,180 +1,147 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
+import { onMounted, ref } from "vue";
+import { createPaper, deletePaper, listPapers, type Paper } from "./lib/api";
 
-const message = ref("");
+const papers = ref<Paper[]>([]);
+const title = ref("");
+const venueName = ref("");
+const publicationYear = ref<number | null>(null);
+const errorMessage = ref("");
 
-async function checkBackend() {
-  message.value = await invoke<string>("app_info");
+async function refreshPapers() {
+  papers.value = await listPapers();
 }
 
-const greetMsg = ref("");
-const name = ref("");
+async function handleCreatePaper() {
+  errorMessage.value = "";
 
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsg.value = await invoke("greet", { name: name.value });
+  try {
+    await createPaper({
+      title: title.value,
+      venue_name: venueName.value || null,
+      publication_year: publicationYear.value,
+      publication_type: "unknown",
+    });
+
+    title.value = "";
+    venueName.value = "";
+    publicationYear.value = null;
+
+    await refreshPapers();
+  } catch (error) {
+    errorMessage.value = JSON.stringify(error);
+  }
 }
+
+async function handleDeletePaper(id: string) {
+  await deletePaper(id);
+  await refreshPapers();
+}
+
+onMounted(refreshPapers);
 </script>
 
 <template>
-  <main class="container">
-    <h1>Welcome to Tauri + Vue</h1>
+  <main class="min-h-screen bg-zinc-950 px-8 py-10 text-zinc-100">
+    <section class="mx-auto max-w-5xl">
+      <div class="mb-8">
+        <p class="text-sm text-zinc-400">Phase 1</p>
+        <h1 class="mt-1 text-3xl font-semibold tracking-tight">
+          Paper Manager
+        </h1>
+        <p class="mt-2 text-zinc-400">
+          Local SQLite paper metadata CRUD test.
+        </p>
+      </div>
 
-    <div class="row">
-      <a href="https://vite.dev" target="_blank">
-        <img src="/vite.svg" class="logo vite" alt="Vite logo" />
-      </a>
-      <a href="https://tauri.app" target="_blank">
-        <img src="/tauri.svg" class="logo tauri" alt="Tauri logo" />
-      </a>
-      <a href="https://vuejs.org/" target="_blank">
-        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-      </a>
-    </div>
-    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
+      <section class="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        <h2 class="mb-4 text-lg font-medium">Create Paper</h2>
 
-    <form class="row" @submit.prevent="greet">
-      <input id="greet-input" v-model="name" placeholder="Enter a name..." />
-      <button type="submit">Greet</button>
-    </form>
-    <p>{{ greetMsg }}</p>
+        <div class="grid gap-4 md:grid-cols-3">
+          <input
+            v-model="title"
+            class="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-400"
+            placeholder="Title"
+          />
 
-    <button
-      class="mt-6 rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-950 transition hover:bg-white"
-      @click="checkBackend"
-    >
-      Check Rust Backend Button
-    </button>
+          <input
+            v-model="venueName"
+            class="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-400"
+            placeholder="Venue"
+          />
 
-    <p
-      v-if="message"
-      class="mt-4 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-300"
-    >
-      {{ message }}
-    </p>
+          <input
+            v-model.number="publicationYear"
+            class="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-400"
+            placeholder="Year"
+            type="number"
+          />
+        </div>
+
+        <button
+          class="mt-4 rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-white"
+          @click="handleCreatePaper"
+        >
+          Add Paper
+        </button>
+
+        <p v-if="errorMessage" class="mt-4 text-sm text-red-400">
+          {{ errorMessage }}
+        </p>
+      </section>
+
+      <section class="rounded-2xl border border-zinc-800 bg-zinc-900">
+        <div class="border-b border-zinc-800 px-6 py-4">
+          <h2 class="text-lg font-medium">Papers</h2>
+        </div>
+
+        <table class="w-full text-left text-sm">
+          <thead class="text-zinc-400">
+            <tr class="border-b border-zinc-800">
+              <th class="px-6 py-3 font-medium">Title</th>
+              <th class="px-6 py-3 font-medium">Year</th>
+              <th class="px-6 py-3 font-medium">Venue</th>
+              <th class="px-6 py-3 font-medium">Status</th>
+              <th class="px-6 py-3 font-medium"></th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr
+              v-for="paper in papers"
+              :key="paper.id"
+              class="border-b border-zinc-800 last:border-0"
+            >
+              <td class="px-6 py-3">
+                {{ paper.title }}
+              </td>
+              <td class="px-6 py-3 text-zinc-400">
+                {{ paper.publication_year ?? "-" }}
+              </td>
+              <td class="px-6 py-3 text-zinc-400">
+                {{ paper.venue_name ?? "-" }}
+              </td>
+              <td class="px-6 py-3 text-zinc-400">
+                {{ paper.reading_status }}
+              </td>
+              <td class="px-6 py-3 text-right">
+                <button
+                  class="text-red-400 hover:text-red-300"
+                  @click="handleDeletePaper(paper.id)"
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+
+            <tr v-if="papers.length === 0">
+              <td class="px-6 py-8 text-center text-zinc-500" colspan="5">
+                No papers yet.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </section>
   </main>
 </template>
-
-<style scoped>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #249b73);
-}
-
-</style>
-<style>
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
-}
-
-</style>
